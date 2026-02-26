@@ -1,10 +1,10 @@
 # DLAB – Distributed Log Analysis Platform
-## Milestone 1: Raw Sockets
+## Milestone 1: Client/Server Model
 
 ---
 
 ## Overview
-DLAB is a distributed system that allows a client to perform **remote log file analysis** over a network using **raw TCP sockets and standard system calls only**. No libraries, no frameworks — everything is built from scratch.
+DLAB is a distributed system that allows a client to perform **remote log file analysis** over a network. No libraries, no frameworks — everything is built from scratch.
 
 ---
 
@@ -21,8 +21,6 @@ DLAB is a distributed system that allows a client to perform **remote log file a
 ## System Design
 
 ### Protocol
-
-A custom application-level protocol is designed on top of TCP. Communication is structured around **headers** — a text-based header is sent by the client as a request, and a text-based header is returned by the server as a response.
 
 ### Request Header Format (Client → Server)
 ```
