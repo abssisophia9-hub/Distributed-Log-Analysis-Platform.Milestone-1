@@ -1,23 +1,131 @@
-# Milestone-1
-Implementing a Distributed Log Analysis Platform (DLAP) for analyzing web server logs in the Common Log Format (CLF)
+# DLAB – Distributed Log Analysis Platform
+## Milestone 1: Raw Sockets
 
-## Design: Dlap Protocol 
-Once the connection is established, the client informs the server whether it wants to perform a request count or a status code distribution analysis using a header.
-Functionality 1: Request Count If the client wants to count the total requests in a log file, the header will be as follows:
-• COUNT[one space][file name][Line Feed]
+---
 
-Upon receiving this header, the server searches for the specified file and performs the analysis.
-• If the file is not found or cannot be parsed, the server shall reply with:
-    ◦ ERROR[one space][reason][Line Feed] [54, 58 image]
-• Else, the server shall reply with a header containing the result:
-    ◦ OK[one space][count][Line Feed]
-Functionality 2: Status Code Distribution If the client wants the distribution of HTTP status codes, the header will be as follows:
-• DIST[one space][file name][Line Feed]
+## Overview
+DLAB is a distributed system that allows a client to perform **remote log file analysis** over a network using **raw TCP sockets and standard system calls only**. No libraries, no frameworks — everything is built from scratch.
 
-Upon receiving this header, the server performs the analysis.
-• If the analysis is successful, the server shall reply with a header containing metadata (body size) followed by the bytes of the distribution data:
-    ◦ OK[one space][body size][Line Feed]
-    ◦ [Bytes of the distribution data]
-• Else, it shall send an error message as follows:
-    ◦ ERROR[one space][reason][Line Feed] [58 image]
+---
 
+## Architecture
+```
+[DlapClient.java]  ——— TCP Socket (port 8888) ———  [DlapServer.java]
+  sends request header                               reads log file
+  + filename                                         executes analysis
+  receives response header                           sends response header back
+```
+
+---
+
+## System Design
+
+### Protocol
+
+A custom application-level protocol is designed on top of TCP. Communication is structured around **headers** — a text-based header is sent by the client as a request, and a text-based header is returned by the server as a response.
+
+### Request Header Format (Client → Server)
+```
+COMMAND fileName\n
+```
+
+| Field | Description |
+|---|---|
+| `COMMAND` | The operation to perform (`COUNT` or `DIST`) |
+| `fileName` | The name of the log file to analyse on the server |
+| `\n` | Delimiter that synchronises the handshake |
+
+### Response Header Format (Server → Client)
+```
+OK result\n
+```
+or for binary data:
+```
+OK size\n
+<raw bytes body>
+```
+or on failure:
+```
+ERROR INVALID_COMMAND\n
+```
+
+---
+
+## Operations
+
+### COUNT
+- **Request Header:** `COUNT fileName\n`
+- **Response Header:** `OK <lineCount>\n`
+- **Description:** Counts the total number of lines in the remote log file.
+```
+Client                            Server
+  |                                 |
+  |——— Request Header ————————————→ |
+  |    "COUNT app.log\n"            |
+  |                                 | reads file
+  |                                 | counts lines
+  |←—— Response Header ————————————|
+  |    "OK 42\n"                    |
+```
+
+### DIST (Code Distribution)
+- **Request Header:** `CODE DISTRIBUTION fileName\n`
+- **Response Header:** `OK <size>\n` followed by raw bytes body
+- **Description:** Returns the byte distribution of the remote log file.
+```
+Client                            Server
+  |                                 |
+  |——— Request Header ————————————→ |
+  |    "CODE DISTRIBUTION app.log\n"|
+  |                                 | reads file
+  |                                 | builds distribution
+  |←—— Response Header ————————————|
+  |    "OK 256\n"                   |
+  |←—— Body (raw bytes) ————————————|
+  |    [12, 45, 0, ...]             |
+```
+
+---
+
+## Implementation
+
+| File | Role |
+|---|---|
+| `DlapServer.java` | Listens on port 8888, parses request header, analyses log file, sends response header |
+| `DlapClient.java` | Connects to server, sends request header, reads response header, prints result |
+
+---
+
+## How to Run
+
+### Step 1 — Compile
+```bash
+javac DlapServer.java
+javac DlapClient.java
+```
+
+### Step 2 — Start the Server (Terminal 1)
+```bash
+java DlapServer
+```
+```
+DLAP Server listening on port 8888...
+```
+
+### Step 3 — Run the Client (Terminal 2)
+
+Count lines:
+```bash
+java DlapClient c app.log
+```
+```
+The result of the count service requested is as follows: 42
+```
+
+Get distribution:
+```bash
+java DlapClient cd app.log
+```
+```
+The code distribution is as follows: [12, 45, 0, ...]
+```
