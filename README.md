@@ -10,7 +10,7 @@ DLAB is a distributed system that allows a client to perform **remote log file a
 
 ## Architecture
 ```
-[DlapClient.java]  ——— TCP Socket (port 8888) ———  [DlapServer.java]
+[DlapClient.java]  ——— (port 8888) ———  [DlapServer.java]
   sends request header                               reads log file
   + filename                                         executes analysis
   receives response header                           sends response header back
