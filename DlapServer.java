@@ -3,55 +3,86 @@ import java.io.*;
 import java.util.*;
 
 public class DlapServer {
+
+    static final String FILE_NAME = "logs.txt";
+
     public static void main(String[] args) throws Exception {
-        int port = 8888; // Selecting a specific port for passive opening 
-
-        // 1. Create ServerSocket in try-with-resources 
+        int port = 8888;
         try (ServerSocket ss = new ServerSocket(port)) {
-            System.out.println("DLAP Server listening on port " + port + "...");
-
+            System.out.println("Server bound to port: " + port);
             while (true) {
                 try (Socket socket = ss.accept()) {
-                    // 3. Establish I/O streams for the connection handle
+                    System.out.println("Connected to client: " + socket.getInetAddress());
+
                     BufferedReader headerReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                     BufferedWriter headerWriter = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
                     DataOutputStream dataOut = new DataOutputStream(socket.getOutputStream());
 
-                    // 4. Read Header
-                    String header = headerReader.readLine(); 
+                    String header = headerReader.readLine();
                     if (header == null) continue;
 
                     StringTokenizer strk = new StringTokenizer(header, " ");
-                    String command = strk.nextToken();
-                    String fileName = strk.nextToken();
+                    String command = strk.nextToken().toUpperCase();
 
-                    // 5. Processing (Remote Analysis Logic) 
                     if (command.equals("COUNT")) {
-                        long count = performRemoteCount(fileName); 
-                        
-                        // Send Success Reply Header
-                        headerWriter.write("OK " + count + "\n");
-                        headerWriter.flush();
+                        analyzeCount(headerWriter);
                     } 
-                    else if (command.equals("DIST")) {
-                        byte[] distributionData = performRemoteDist(fileName);
-                        
-                        // Send Reply Header with Metadata (Size) 
-                        headerWriter.write("OK " + distributionData.length + "\n");
-                        headerWriter.flush();
-                        
-                        // Send the Delivery (Body)
-                        dataOut.write(distributionData);
-                        dataOut.flush();
-                    } 
+                    else if (command.equals("DISTRIBUTION")) {
+                        analyzeDistribution(headerWriter);
+                    }
                     else {
                         headerWriter.write("ERROR INVALID_COMMAND\n");
                         headerWriter.flush();
                     }
+
                 } catch (Exception e) {
                     System.err.println("Interaction error: " + e.getMessage());
-                } 
-                // Context and state cleared automatically when inner try-block ends 
+                }
             }
         }
     }
+
+    static void analyzeCount(BufferedWriter headerWriter) throws Exception {
+        int count = 0;
+        try (BufferedReader fileReader = new BufferedReader(new FileReader(FILE_NAME))) {
+            while (fileReader.readLine() != null) {
+                count++;
+            }
+        }
+        headerWriter.write("OK \n");
+        headerWriter.flush();
+        headerWriter.write("TOTAL=" + count);
+        headerWriter.flush();
+    }
+
+    static void analyzeDistribution(BufferedWriter headerWriter) throws Exception {
+        ArrayList<String> statusCodes = new ArrayList<>();
+        try (BufferedReader fileReader = new BufferedReader(new FileReader(FILE_NAME))) {
+            String line;
+            while ((line = fileReader.readLine()) != null) {
+                String[] parts = line.trim().split(" ");
+                if (parts.length >= 2) {
+                    statusCodes.add(parts[parts.length - 2]);
+                }
+            }
+        }
+
+        ArrayList<String> counted = new ArrayList<>();
+        StringBuilder response = new StringBuilder();
+        for (String code : statusCodes) {
+            if (!counted.contains(code)) {
+                int count = 0;
+                for (String c : statusCodes) {
+                    if (c.equals(code)) count++;
+                }
+                response.append(code).append("=").append(count).append("\n");
+                counted.add(code);
+            }
+        }
+
+        headerWriter.write("OK \n");
+        headerWriter.flush();
+        headerWriter.write(response.toString());
+        headerWriter.flush();
+    }
+}
