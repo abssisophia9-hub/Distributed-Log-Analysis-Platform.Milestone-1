@@ -18,7 +18,7 @@ DLAB is a distributed system that allows a client to perform **remote log file a
 
 ---
 
-## System Design
+## Design
 
 ### Protocol
 
